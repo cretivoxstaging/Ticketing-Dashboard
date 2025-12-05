@@ -9,7 +9,8 @@ export function Dashboard() {
   type Participant = {
     qty: number
     total_paid: number
-    ispaid: number
+    status: string
+    clock_in: string | null
   }
 
   type ApiResponse = {
@@ -27,17 +28,27 @@ export function Dashboard() {
         setLoading(true)
         const response = await fetch("/api/participants")
 
-        if (!response.ok) {
-          throw new Error("Gagal mengambil data peserta")
+        let participants: Participant[] = []
+        if (response.status === 404) {
+          // Treat missing data as empty without showing error
+          participants = []
+        } else {
+          if (!response.ok) {
+            throw new Error("Gagal mengambil data peserta")
+          }
+          const apiData: ApiResponse = await response.json()
+          participants = Array.isArray(apiData.data) ? apiData.data : []
         }
 
-        const apiData: ApiResponse = await response.json()
-        const participants = Array.isArray(apiData.data) ? apiData.data : []
+        // Tiket terjual: status === "1" atau ada clock_in (checkin)
+        const soldParticipants = participants.filter((p) => {
+          const status = String(p.status || "").toLowerCase()
+          const hasCheckin = p.clock_in !== null && p.clock_in !== ""
+          return status === "1" || hasCheckin
+        })
 
-        const paidParticipants = participants.filter((p) => Number(p.ispaid) === 1)
-
-        const totalTickets = paidParticipants.reduce((sum, p) => sum + (Number(p.qty) || 0), 0)
-        const totalPaid = paidParticipants.reduce((sum, p) => sum + (Number(p.total_paid) || 0), 0)
+        const totalTickets = soldParticipants.reduce((sum, p) => sum + (Number(p.qty) || 0), 0)
+        const totalPaid = soldParticipants.reduce((sum, p) => sum + (Number(p.total_paid) || 0), 0)
 
         setTotalPaidTickets(totalTickets)
         setTotalRevenue(totalPaid)
@@ -64,19 +75,19 @@ export function Dashboard() {
   const stats = [
     {
       title: "Total Penjualan Tiket",
-      // total tiket yang sudah dibayar (qty dari peserta dengan ispaid = 1)
+      // total tiket terjual (status = 1 atau checkin)
       value: loading ? "Loading..." : totalPaidTickets.toLocaleString("id-ID"),
       icon: Ticket,
       trend: "",
-      description: "Total tiket yang sudah dibayar",
+      description: "Total tiket terjual (sudah dibayar atau checkin)",
     },
     {
       title: "Total Pendapatan",
-      // total nilai pembayaran dari tiket yang sudah dibayar
+      // total nilai pembayaran dari tiket terjual
       value: loading ? "Loading..." : formatCurrency(totalRevenue),
       icon: DollarSign,
       trend: "",
-      description: "Total pendapatan dari tiket yang sudah dibayar",
+      description: "Total pendapatan dari tiket terjual",
     },
     {
       title: "Tiket Terjual Minggu Ini",
