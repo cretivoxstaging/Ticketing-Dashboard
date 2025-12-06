@@ -144,9 +144,10 @@ export function TicketTable() {
       const statusLower = (ticket.status || "").toLowerCase()
       const isUnpaid = statusLower === "0" || statusLower === "belum bayar"
       const matchesSearch =
+        (ticket.order_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (ticket.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (ticket.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (ticket.type_ticket || "").toLowerCase().includes(searchTerm.toLowerCase())
+        (ticket.whatsapp || "").toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchesType =
         typeFilter === "all" || (ticket.type_ticket || "").toLowerCase() === typeFilter.toLowerCase()
@@ -223,8 +224,8 @@ export function TicketTable() {
       {/* Header ala AttendancePage */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">Tabel Tiket</h2>
-          <p className="text-gray-600 mt-1">Kelola dan pantau penjualan tiket</p>
+          <h2 className="text-3xl font-bold text-gray-900">Tickets Table</h2>
+          <p className="text-gray-600 mt-1">Manage and monitor ticket sales</p>
         </div>
       </div>
 
@@ -307,7 +308,7 @@ export function TicketTable() {
                 onClick={handleExportExcel}
                 disabled={loading || sortedAndFilteredTickets.length === 0}
                 variant="outline"
-                className="bg-green-600 text-white hover:bg-green-700 border-green-600"
+                className="bg-primary text-white hover:bg-blue-500 border-green-600"
               >
                 <Download className="h-4 w-4" />
                 Export
@@ -354,6 +355,7 @@ export function TicketTable() {
                 <TableHeader>
                   <TableRow className="bg-black text-white">
                     <TableHead className="text-white font-bold w-16">No</TableHead>
+                    <TableHead className="text-white font-bold">ID Ticket</TableHead>
                     <TableHead className="text-white font-bold">
                       <button
                         onClick={() => handleSort("name")}
@@ -363,15 +365,7 @@ export function TicketTable() {
                         <ArrowUpDown className="h-4 w-4" />
                       </button>
                     </TableHead>
-                    <TableHead className="text-white font-bold">
-                      <button
-                        onClick={() => handleSort("email")}
-                        className="flex items-center gap-1 font-semibold hover:text-blue-200"
-                      >
-                        Email
-                        <ArrowUpDown className="h-4 w-4" />
-                      </button>
-                    </TableHead>
+                    <TableHead className="text-white font-bold">Email</TableHead>
                     <TableHead className="text-white font-bold">WhatsApp</TableHead>
                     <TableHead className="text-white font-bold">
                       <button
@@ -382,15 +376,7 @@ export function TicketTable() {
                         <ArrowUpDown className="h-4 w-4" />
                       </button>
                     </TableHead>
-                    <TableHead className="text-white font-bold">
-                      <button
-                        onClick={() => handleSort("qty")}
-                        className="flex items-center gap-1 font-semibold hover:text-blue-200"
-                      >
-                        Ticket
-                        <ArrowUpDown className="h-4 w-4" />
-                      </button>
-                    </TableHead>
+                    <TableHead className="text-white font-bold">Ticket</TableHead>
                     <TableHead className="text-white font-bold">
                       <button
                         onClick={() => handleSort("total_paid")}
@@ -409,6 +395,7 @@ export function TicketTable() {
                       <TableCell className="font-medium text-black">
                         {startIndex + index + 1}
                       </TableCell>
+                      <TableCell className="font-medium text-black">{ticket.order_id}</TableCell>
                       <TableCell className="font-medium text-black">{ticket.name}</TableCell>
                       <TableCell className="text-black text-sm">{ticket.email}</TableCell>
                       <TableCell className="text-black text-sm">{ticket.whatsapp}</TableCell>
@@ -423,38 +410,37 @@ export function TicketTable() {
                 </TableBody>
               </Table>
 
-              <div className="flex flex-col gap-3 border-t bg-white px-4 py-3 sm:flex-row sm:items-center md:justify-between">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-                  {/* Showing entries dropdown di ujung kiri pagination */}
-                  <div className="flex items-center gap-2 text-sm text-gray-700">
-                    <span>Showing</span>
-                    <Select
-                      value={pageSize === "all" ? "all" : String(pageSize)}
-                      onValueChange={(value) => {
-                        if (value === "all") {
-                          setPageSize("all")
-                        } else {
-                          setPageSize(Number(value))
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="w-[100px] bg-white border-gray-300 text-black justify-between">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border border-gray-200 text-black">
-                        <SelectItem value="10">10</SelectItem>
-                        <SelectItem value="25">25</SelectItem>
-                        <SelectItem value="50">50</SelectItem>
-                        <SelectItem value="100">100</SelectItem>
-                        <SelectItem value="200">200</SelectItem>
-                        <SelectItem value="all">All</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <span>entries</span>
-                  </div>
+              <div className="flex flex-col gap-3 border-t bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between w-full">
+                {/* Showing entries dropdown di ujung kiri */}
+                <div className="flex items-center gap-2 text-sm text-gray-700">
+                  <span>Showing</span>
+                  <Select
+                    value={pageSize === "all" ? "all" : String(pageSize)}
+                    onValueChange={(value) => {
+                      if (value === "all") {
+                        setPageSize("all")
+                      } else {
+                        setPageSize(Number(value))
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-[100px] bg-white border-gray-300 text-black justify-between">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border border-gray-200 text-black">
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="200">200</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span>entries</span>
                 </div>
 
-                <Pagination>
+                {/* Pagination di ujung kanan */}
+                <Pagination className="ml-auto !mx-0 !w-auto !justify-end">
                   <PaginationContent>
                     <PaginationItem>
                       <PaginationPrevious
