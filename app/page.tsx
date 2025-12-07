@@ -30,7 +30,7 @@ export default function Page() {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} onLogout={logout} />
-      <main className="flex-1 overflow-auto">{activeTab === "dashboard" ? <Dashboard /> : <TicketTable />}</main>
+      <main className="flex-1 overflow-auto md:ml-64">{activeTab === "dashboard" ? <Dashboard /> : <TicketTable />}</main>
     </div>
   )
 }

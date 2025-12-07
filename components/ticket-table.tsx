@@ -13,7 +13,9 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-import { Search, ArrowUpDown, Loader2, CalendarIcon } from "lucide-react"
+import { Search, ArrowUpDown, Loader2, CalendarIcon, RefreshCw, Download } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import * as XLSX from "xlsx"
 
 interface Participant {
   id: number
@@ -55,32 +57,80 @@ export function TicketTable() {
   const [sortConfig, setSortConfig] = useState<{
     key: keyof Participant | null
     direction: "asc" | "desc"
-  }>({ key: null, direction: "asc" })
+  }>({ key: "id", direction: "desc" })
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-        const response = await fetch("/api/participants")
-        
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      setIsRefreshing(true)
+      const response = await fetch("/api/participants")
+
+      if (response.status === 404) {
+        // Treat missing data as empty without showing error
+        setTickets([])
+        setError(null)
+      } else {
         if (!response.ok) {
           throw new Error("Failed to fetch data")
         }
-        
+
         const apiData: ApiResponse = await response.json()
         setTickets(apiData.data)
         setError(null)
-      } catch (err) {
-        console.error("Error fetching data:", err)
-        setError(err instanceof Error ? err.message : "Gagal mengambil data")
-        setTickets([])
-      } finally {
-        setLoading(false)
       }
+    } catch (err) {
+      console.error("Error fetching data:", err)
+      setError(err instanceof Error ? err.message : "Gagal mengambil data")
+      setTickets([])
+    } finally {
+      setLoading(false)
+      setIsRefreshing(false)
     }
+  }
 
+  useEffect(() => {
     fetchData()
   }, [])
+
+  const handleRefresh = () => {
+    fetchData()
+  }
+
+  const handleExportExcel = () => {
+    // Prepare data for export
+    const exportData = sortedAndFilteredTickets.map((ticket, index) => ({
+      No: index + 1,
+      Name: ticket.name,
+      Email: ticket.email,
+      WhatsApp: ticket.whatsapp,
+      "Type Tiket": ticket.type_ticket,
+      "Date Ticket": ticket.date_ticket,
+      Qty: ticket.qty,
+      "Total Payment": ticket.total_paid,
+      Status: ticket.status === "1" || ticket.status?.toLowerCase() === "sudah bayar" 
+        ? "Sudah Bayar" 
+        : ticket.status === "0" || ticket.status?.toLowerCase() === "belum bayar"
+        ? "Belum Bayar"
+        : ticket.status || "Tidak Diketahui",
+      "Order ID": ticket.order_id,
+      "Date Paid": ticket.date_paid,
+      "Created At": ticket.created_at,
+    }))
+
+    // Create workbook and worksheet
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Tickets")
+
+    // Generate filename with current date
+    const date = new Date()
+    const dateStr = date.toISOString().split("T")[0]
+    const filename = `tickets_export_${dateStr}.xlsx`
+
+    // Write file
+    XLSX.writeFile(wb, filename)
+  }
 
   const handleSort = (key: keyof Participant) => {
     setSortConfig((prev) => ({
@@ -91,10 +141,13 @@ export function TicketTable() {
 
   const sortedAndFilteredTickets = tickets
     .filter((ticket) => {
+      const statusLower = (ticket.status || "").toLowerCase()
+      const isUnpaid = statusLower === "0" || statusLower === "belum bayar"
       const matchesSearch =
+        (ticket.order_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (ticket.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (ticket.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (ticket.type_ticket || "").toLowerCase().includes(searchTerm.toLowerCase())
+        (ticket.whatsapp || "").toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchesType =
         typeFilter === "all" || (ticket.type_ticket || "").toLowerCase() === typeFilter.toLowerCase()
@@ -102,7 +155,7 @@ export function TicketTable() {
       const matchesDate =
         dateFilter === "all" || (ticket.date_ticket || "").toLowerCase() === dateFilter.toLowerCase()
 
-      return matchesSearch && matchesType && matchesDate
+      return !isUnpaid && matchesSearch && matchesType && matchesDate
     })
     .sort((a, b) => {
       if (!sortConfig.key) return 0
@@ -140,15 +193,18 @@ export function TicketTable() {
     }).format(amount)
   }
 
-  const getStatusBadge = (ispaid: number) => {
-    switch (ispaid) {
-      case 1:
+  const getStatusBadge = (status: string) => {
+    const statusLower = (status || "").toLowerCase()
+    switch (statusLower) {
+      case "1":
+      case "Awaiting Check-in":
         return (
           <Badge className="bg-green-100 text-green-800 hover:bg-green-200 border border-green-200">
-            Sudah Bayar
+            Awaiting Check-in
           </Badge>
         )
-      case 0:
+      case "0":
+      case "belum bayar":
         return (
           <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border border-yellow-200">
             Belum Bayar
@@ -156,8 +212,8 @@ export function TicketTable() {
         )
       default:
         return (
-          <Badge className="bg-red-100 text-red-800 hover:bg-red-200 border border-red-200">
-            Tidak Diketahui
+          <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-200">
+            {status || "Tidak Diketahui"}
           </Badge>
         )
     }
@@ -168,8 +224,8 @@ export function TicketTable() {
       {/* Header ala AttendancePage */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">Tabel Tiket</h2>
-          <p className="text-gray-600 mt-1">Kelola dan pantau penjualan tiket</p>
+          <h2 className="text-3xl font-bold text-gray-900">Tickets Table</h2>
+          <p className="text-gray-600 mt-1">Manage and monitor ticket sales</p>
         </div>
       </div>
 
@@ -188,7 +244,7 @@ export function TicketTable() {
             </div>
 
             {/* Type filter dropdown */}
-            <div className="min-w-[50px]">
+            <div className="min-w-0">
               <Select value={typeFilter} onValueChange={setTypeFilter}>
                 <SelectTrigger className="bg-white border-gray-300 text-black justify-between">
                   <SelectValue placeholder="All Types" />
@@ -213,7 +269,7 @@ export function TicketTable() {
             </div>
 
             {/* Date_ticket filter dropdown */}
-            <div className="min-w-[180px]">
+            <div className="min-w-0">
               <Select value={dateFilter} onValueChange={setDateFilter}>
                 <SelectTrigger className="bg-white border-gray-300 text-black justify-between">
                   <SelectValue placeholder="All Dates" />
@@ -235,6 +291,28 @@ export function TicketTable() {
                     ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Refresh and Export buttons */}
+            <div className="flex items-center gap-2 ml-auto">
+              <Button
+                onClick={handleRefresh}
+                disabled={isRefreshing || loading}
+                variant="outline"
+                className="bg-gray-600 text-white hover:bg-gray-700 border-gray-600"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+              <Button
+                onClick={handleExportExcel}
+                disabled={loading || sortedAndFilteredTickets.length === 0}
+                variant="outline"
+                className="bg-primary text-white hover:bg-blue-500 border-green-600"
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </Button>
             </div>
 
           </div>
@@ -277,6 +355,7 @@ export function TicketTable() {
                 <TableHeader>
                   <TableRow className="bg-black text-white">
                     <TableHead className="text-white font-bold w-16">No</TableHead>
+                    <TableHead className="text-white font-bold">ID Ticket</TableHead>
                     <TableHead className="text-white font-bold">
                       <button
                         onClick={() => handleSort("name")}
@@ -286,15 +365,7 @@ export function TicketTable() {
                         <ArrowUpDown className="h-4 w-4" />
                       </button>
                     </TableHead>
-                    <TableHead className="text-white font-bold">
-                      <button
-                        onClick={() => handleSort("email")}
-                        className="flex items-center gap-1 font-semibold hover:text-blue-200"
-                      >
-                        Email
-                        <ArrowUpDown className="h-4 w-4" />
-                      </button>
-                    </TableHead>
+                    <TableHead className="text-white font-bold">Email</TableHead>
                     <TableHead className="text-white font-bold">WhatsApp</TableHead>
                     <TableHead className="text-white font-bold">
                       <button
@@ -305,15 +376,7 @@ export function TicketTable() {
                         <ArrowUpDown className="h-4 w-4" />
                       </button>
                     </TableHead>
-                    <TableHead className="text-white font-bold">
-                      <button
-                        onClick={() => handleSort("qty")}
-                        className="flex items-center gap-1 font-semibold hover:text-blue-200"
-                      >
-                        Ticket
-                        <ArrowUpDown className="h-4 w-4" />
-                      </button>
-                    </TableHead>
+                    <TableHead className="text-white font-bold">Ticket</TableHead>
                     <TableHead className="text-white font-bold">
                       <button
                         onClick={() => handleSort("total_paid")}
@@ -332,50 +395,52 @@ export function TicketTable() {
                       <TableCell className="font-medium text-black">
                         {startIndex + index + 1}
                       </TableCell>
+                      <TableCell className="font-medium text-black">{ticket.order_id}</TableCell>
                       <TableCell className="font-medium text-black">{ticket.name}</TableCell>
                       <TableCell className="text-black text-sm">{ticket.email}</TableCell>
                       <TableCell className="text-black text-sm">{ticket.whatsapp}</TableCell>
-                      <TableCell className="text-black">{ticket.type_ticket}</TableCell>
+                      <TableCell className="text-black">{ticket.type_ticket}
+                        <div>{ticket.date_ticket}</div>
+                      </TableCell>
                       <TableCell className="text-black">{ticket.qty}</TableCell>
                       <TableCell className="text-black">{formatCurrency(ticket.total_paid)}</TableCell>
-                      <TableCell>{getStatusBadge(ticket.ispaid)}</TableCell>
+                      <TableCell>{getStatusBadge(ticket.status)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
 
-              <div className="flex flex-col gap-3 border-t bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-                  {/* Showing entries dropdown di ujung kiri pagination */}
-                  <div className="flex items-center gap-2 text-sm text-gray-700">
-                    <span>Showing</span>
-                    <Select
-                      value={pageSize === "all" ? "all" : String(pageSize)}
-                      onValueChange={(value) => {
-                        if (value === "all") {
-                          setPageSize("all")
-                        } else {
-                          setPageSize(Number(value))
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="w-[100px] bg-white border-gray-300 text-black justify-between">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border border-gray-200 text-black">
-                        <SelectItem value="10">10</SelectItem>
-                        <SelectItem value="25">25</SelectItem>
-                        <SelectItem value="50">50</SelectItem>
-                        <SelectItem value="100">100</SelectItem>
-                        <SelectItem value="200">200</SelectItem>
-                        <SelectItem value="all">All</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <span>entries</span>
-                  </div>
+              <div className="flex flex-col gap-3 border-t bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between w-full">
+                {/* Showing entries dropdown di ujung kiri */}
+                <div className="flex items-center gap-2 text-sm text-gray-700">
+                  <span>Showing</span>
+                  <Select
+                    value={pageSize === "all" ? "all" : String(pageSize)}
+                    onValueChange={(value) => {
+                      if (value === "all") {
+                        setPageSize("all")
+                      } else {
+                        setPageSize(Number(value))
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-[100px] bg-white border-gray-300 text-black justify-between">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border border-gray-200 text-black">
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="200">200</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span>entries</span>
                 </div>
 
-                <Pagination>
+                {/* Pagination di ujung kanan */}
+                <Pagination className="ml-auto mx-0 w-auto justify-end">
                   <PaginationContent>
                     <PaginationItem>
                       <PaginationPrevious
