@@ -197,10 +197,10 @@ export function TicketTable() {
     const statusLower = (status || "").toLowerCase()
     switch (statusLower) {
       case "1":
-      case "sudah bayar":
+      case "Awaiting Check-in":
         return (
           <Badge className="bg-green-100 text-green-800 hover:bg-green-200 border border-green-200">
-            Sudah Bayar
+            Awaiting Check-in
           </Badge>
         )
       case "0":
@@ -440,7 +440,7 @@ export function TicketTable() {
                 </div>
 
                 {/* Pagination di ujung kanan */}
-                <Pagination className="ml-auto !mx-0 !w-auto !justify-end">
+                <Pagination className="ml-auto mx-0 w-auto justify-end">
                   <PaginationContent>
                     <PaginationItem>
                       <PaginationPrevious
